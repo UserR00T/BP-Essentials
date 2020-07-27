@@ -51,7 +51,6 @@ namespace BPEssentials.Utils
             return $"{player.username}: {message.CleanerMessage()}";
         }
 
-
         public static void SendToAllEnabledChat(string message, bool useColors = true)
         {
             foreach (var currPlayer in EntityCollections.Humans)
@@ -80,5 +79,10 @@ namespace BPEssentials.Utils
         }
 
         public static void SendToAllEnabledChat(List<string> messages) => SendToAllEnabledChat(messages.ToArray());
+
+        public static bool MessageInBlacklist(string message, List<string> blacklist)
+        {
+            return blacklist.Any(w => message.Contains(w));
+        }
     }
 }
