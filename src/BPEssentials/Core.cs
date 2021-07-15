@@ -13,6 +13,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace BPEssentials
 {
@@ -47,6 +49,8 @@ namespace BPEssentials
 
         public ICooldownHandler WarpsCooldownHandler { get; set; }
 
+        private ICooldownHandler CommandsCooldownHandler { get; set; }
+
         public WarpHandler WarpHandler { get; set; }
 
         public KitHandler KitHandler { get; set; }
@@ -65,6 +69,7 @@ namespace BPEssentials
             };
             KitsCooldownHandler = new CooldownHandler(Info.GroupNamespace + ":cooldowns:kits");
             WarpsCooldownHandler = new CooldownHandler(Info.GroupNamespace + ":cooldowns:warps");
+            CommandsCooldownHandler = new CooldownHandler(Info.GroupNamespace + ":cooldowns:commands");
 
             WarpHandler = new WarpHandler();
 
@@ -110,42 +115,55 @@ namespace BPEssentials
                     continue;
                 }
                 CommandHandler.RegisterCommand(command.Commands, del, (player, apiCommand) =>
-                {
-                    if (command.Disabled)
                     {
-                        player.TS("command_disabled", command.CommandName);
-                        return false;
-                    }
-                    if (!player.GetExtendedPlayer().EnabledBypass)
-                    {
-                        if (!command.AllowWhileDead && player.IsDead)
+                        if (command.Disabled)
                         {
-                            player.TS("command_failed_crimes", command.CommandName);
+                            player.TS("command_disabled", command.CommandName);
                             return false;
                         }
-                        if (!command.AllowWhileKO && player.IsKnockedOut)
+
+                        if (player.GetExtendedPlayer().EnabledBypass)
                         {
-                            player.TS("command_failed_ko", command.CommandName);
-                            return false;
+                        return true;
                         }
-                        if (!command.AllowWhileCuffed && player.IsRestrained)
                         {
-                            player.TS("command_failed_cuffed", command.CommandName);
-                            return false;
+                            if (!command.AllowWhileDead && player.IsDead)
+                            {
+                                player.TS("command_failed_crimes", command.CommandName);
+                                return false;
+                            }
+
+                            if (!command.AllowWhileCuffed && player.IsRestrained)
+                            {
+                                player.TS("command_failed_cuffed", command.CommandName);
+                                return false;
+                            }
+
+                            if (!command.AllowWhileJailed && player.svPlayer.job.info.shared.jobIndex == BPAPI.Instance.PrisonerIndex)
+                            {
+                                player.TS("command_failed_jail", command.CommandName);
+                                return false;
+                            }
+
+                            if (!command.AllowWithCrimes && player.wantedLevel != 0)
+                            {
+                                player.TS("command_failed_crimes", command.CommandName);
+                                return false;
+                            }
+
+                            if (command.CoolDown > 0 && CommandsCooldownHandler.IsCooldown(player.svPlayer, command.CommandName, command.CoolDown))
+                            {
+                                player.TS("command_failed_cooldown", command.CommandName,
+                                    CommandsCooldownHandler.GetCooldown(player.svPlayer, command.CommandName, command.CoolDown));
+                                return false;
+                            }
                         }
-                        if (!command.AllowWhileJailed && player.svPlayer.job.info.shared.jobIndex == BPAPI.Instance.PrisonerIndex)
+                        if (command.CoolDown > 0)
                         {
-                            player.TS("command_failed_jail", command.CommandName);
-                            return false;
+                            CommandsCooldownHandler.AddCooldown(player.svPlayer, command.CommandName);
                         }
-                        if (!command.AllowWithCrimes && player.wantedLevel != 0)
-                        {
-                            player.TS("command_failed_crimes", command.CommandName);
-                            return false;
-                        }
-                    }
-                    return true;
-                }, command.CommandName);
+                        return true;
+                    }, command.CommandName);
             }
         }
 
